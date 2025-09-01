@@ -1,4 +1,4 @@
-import { supabaseServer } from '@/lib/supabase';
+﻿import { supabaseServer } from '@/lib/supabase-server';
 
 export default async function Report({ params }: { params: { id: string }}) {
   const supa = supabaseServer();
@@ -33,7 +33,7 @@ export default async function Report({ params }: { params: { id: string }}) {
       <section className="border p-4 rounded">
         <div className="text-sm text-gray-600">Estimated Damages (USD)</div>
         <div className="text-xl">
-          ${out.damages?.min?.toLocaleString()} — <strong>${out.damages?.median?.toLocaleString()}</strong> — ${out.damages?.max?.toLocaleString()}
+          ${out.damages?.min?.toLocaleString()} â€” <strong>${out.damages?.median?.toLocaleString()}</strong> â€” ${out.damages?.max?.toLocaleString()}
         </div>
       </section>
       <section className="border p-4 rounded">
@@ -43,7 +43,7 @@ export default async function Report({ params }: { params: { id: string }}) {
       <section className="border p-4 rounded">
         <div className="text-sm text-gray-600 mb-2">Precedents</div>
         <ul className="list-disc pl-6">{(out.precedents||[]).map((p:any,i:number)=><li key={i}>
-          <strong>{p.caseName}</strong>{p.citation ? `, ${p.citation}` : ''} — {p.authority||''} {p.similarityScore ? `(${Math.round(p.similarityScore*100)}%)` : ''}
+          <strong>{p.caseName}</strong>{p.citation ? `, ${p.citation}` : ''} â€” {p.authority||''} {p.similarityScore ? `(${Math.round(p.similarityScore*100)}%)` : ''}
         </li>)}</ul>
       </section>
       <p className="text-xs text-gray-500">

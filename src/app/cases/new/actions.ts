@@ -1,5 +1,5 @@
-'use server';
-import { supabaseServer } from '@/lib/supabase';
+﻿'use server';
+import { supabaseServer } from '@/lib/supabase-server';
 
 export async function createCase(formData: FormData) {
   const name = String(formData.get('name')||'').trim();

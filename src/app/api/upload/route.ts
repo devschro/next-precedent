@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+﻿import { NextRequest, NextResponse } from 'next/server';
+import { supabaseServer } from '@/lib/supabase-server';
 import crypto from 'crypto';
 
 export const runtime = 'nodejs';
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     });
     if (jobErr) throw jobErr;
 
-    // 4) 🔔 Kick the worker immediately (no cron needed)
+    // 4) ðŸ”” Kick the worker immediately (no cron needed)
     //    Requires env vars: SUPABASE_FUNCTION_URL and CRON_SECRET
     try {
       const fnUrl = process.env.SUPABASE_FUNCTION_URL;
