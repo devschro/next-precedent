@@ -6,6 +6,7 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const openaiKey = Deno.env.get('OPENAI_API_KEY')!;
 const bucket = 'case-files';
+const CRON_SECRET = Deno.env.get('CRON_SECRET'); // <— NEW
 
 const supa = createClient(supabaseUrl, serviceRole);
 const openai = new OpenAI({ apiKey: openaiKey });
@@ -152,8 +153,23 @@ async function handle(job: Job) {
   }
 }
 
-Deno.serve(async () => {
+// ---- SECURE ENTRYPOINT (header or ?token=) ----
+Deno.serve(async (req: Request) => {
+  const url = new URL(req.url);
+  const fromHeader = req.headers.get('x-cron-secret');
+  const fromQuery = url.searchParams.get('token');
+
+  if (!CRON_SECRET || (fromHeader !== CRON_SECRET && fromQuery !== CRON_SECRET)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
   const jobs = await claimJobs(3);
   for (const j of jobs) await handle(j);
-  return new Response(JSON.stringify({ picked: jobs.length }), { headers: { 'Content-Type': 'application/json' }});
+
+  return new Response(JSON.stringify({ picked: jobs.length }), {
+    headers: { 'Content-Type': 'application/json' }
+  });
 });
