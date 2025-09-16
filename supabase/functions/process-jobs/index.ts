@@ -19,16 +19,24 @@ type Job = {
 };
 
 async function claimJobs(limit = 3): Promise<Job[]> {
-  const { data: jobs } = await supa
+  const now = new Date().toISOString();
+
+  const { data: jobs, error } = await supa
     .from('jobs')
     .select('*')
-    .eq('status','queued')
-    .lte('run_after', new Date().toISOString())
+    .eq('status', 'queued')
+    .or(`run_after.is.null,run_after.lte.${now}`)
     .order('created_at', { ascending: true })
     .limit(limit);
+
+  if (error) throw error;
   if (!jobs?.length) return [];
+
   for (const j of jobs) {
-    await supa.from('jobs').update({ status: 'running', updated_at: new Date().toISOString() }).eq('id', j.id);
+    await supa
+      .from('jobs')
+      .update({ status: 'running', updated_at: new Date().toISOString() })
+      .eq('id', j.id);
   }
   return jobs as any;
 }
@@ -93,11 +101,24 @@ async function retrieveContext(org_id: string, case_id: string, query: string) {
 }
 
 function validateEval(json: any) {
-  const a = Number(json.winProbability||0), b = Number(json.settleProbability||0), c = Number(json.trialProbability||0);
-  const sum = a + b + c;
-  if (Math.abs(sum - 1.0) > 0.02) throw new Error('Probabilities must sum to ~1.0');
-  if (!json.damages || json.damages.min > json.damages.median || json.damages.median > json.damages.max) {
-    throw new Error('Damages bands must be ordered');
+  const fields = [
+    "settleProbability",
+    "dismissalProbability",
+    "winAtTrialProbability",
+    "lossAtTrialProbability",
+  ];
+  for (const f of fields) {
+    const v = Number(json[f]);
+    if (!Number.isFinite(v) || v < 0 || v > 1) {
+      throw new Error(`${f} must be 0..1`);
+    }
+  }
+  if (
+    !json.damages ||
+    !(Number(json.damages.min) <= Number(json.damages.median) &&
+      Number(json.damages.median) <= Number(json.damages.max))
+  ) {
+    throw new Error("Damages bands must be ordered");
   }
 }
 
@@ -107,10 +128,34 @@ async function handleEvaluate(job: Job) {
   const { data: cs } = await supa.from('cases').select('name').eq('id', job.case_id).single();
   const ctx = await retrieveContext(job.org_id, job.case_id, cs?.name || 'case evaluation');
 
-  const prompt = `You are a legal evaluation assistant. Using the provided context snippets, output JSON with keys:
-winProbability, settleProbability, trialProbability (sum ≈ 1.0), riskScore (0-100),
-damages {min, median, max, currency}, evidence[], precedents[], explanation{}, retrievalContext{}, modelInfo{}.
-Strictly JSON. Context:\n${ctx.join('\n---\n')}`;
+  const prompt = `You are a legal evaluation assistant. Using only the provided context snippets, return STRICT JSON with:
+
+settleProbability: number (0..1),
+dismissalProbability: number (0..1),        // pre-trial win (dismissal or summary judgment)
+winAtTrialProbability: number (0..1),
+lossAtTrialProbability: number (0..1),
+riskScore: number (0..100),
+
+damages: { min: number, median: number, max: number, currency: "USD" },
+
+explanation: { keyFactors: string[] },      // at least 3
+
+precedents: [
+  { caseName: string, citation?: string, authority?: string, similarityScore?: number }
+],
+
+retrievalContext: { topK?: number },
+modelInfo: { provider: "openai", model: "gpt-4o-mini" }
+
+Rules:
+- JSON only, no prose.
+- If uncertain, give best numeric estimates; do NOT return null.
+- Probabilities DO NOT have to sum to 1.0. They are independent scenario estimates.
+- Provide at least 2 precedents. Use plausible placeholders if none are found.
+
+Context:
+${ctx.join('\n---\n')}`;
+
 
   const resp = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
